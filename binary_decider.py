@@ -62,11 +62,15 @@ class BinaryChooser:
 		#e.g., if triangle_index =20,
 		#20 is replaced with 'i_20','j_20','k_20'.
 		if triangle_index is not None and triangle_index < length:
+			self.labels=list(self.labels)
 			ind = self.labels.index(triangle_index)
 			blah = self.labels.pop(ind)
 			self.labels.append('i_%i' % triangle_index)
 			self.labels.append('j_%i' % triangle_index)
 			self.labels.append('k_%i' % triangle_index)
+			self.labels=np.array(self.labels)
+			if not top>0:
+				self.limit+=2
 		#Shuffle the input list to allow for better error testing
 		np.random.shuffle(self.labels)
 		self.sim_runs = 0
@@ -92,6 +96,15 @@ class BinaryChooser:
 		#Check if a triangle situation appears
 		#If so, handle the values such that i>j>k>i.
 		#Done by doing i=1,j=-1,k=2*opponent
+		try:
+			a = int(a)
+		except:
+			a = str(a)
+		try:
+			b = int(b)
+		except:
+			b= str(b)
+			
 		if type(a) == str and type(b)==str:
 			if a.split('_')[0]=='i':
 				a = 1
@@ -117,17 +130,17 @@ class BinaryChooser:
 			a=int(a.split('_')[1])
 		elif type(b)==str:
 			b=int(b.split('_')[1])
-		#Select the appropriate value and return 1 for left, -1 for right (dumb, I know)
+		#Select the appropriate value and return -1 for left, 1 for right (dumb, I know)
 		if a>b:
 			if np.random.rand<=vict_prob:
-				return -1
-			else:
 				return 1
+			else:
+				return -1
 		elif b>a:
 			if np.random.rand<=vict_prob:
-				return 1
-			else:
 				return -1
+			else:
+				return 1
 				
 	#Return a set of convergence/accuracy information for the automatic testing			
 	def auto_return(self):
@@ -135,8 +148,10 @@ class BinaryChooser:
 		full_mat = self.matrix-self.matrix.T
 		#Calculate all of the row scores. Higher is better.
 		scores = np.sum(full_mat,axis=1)
+		#print scores[list(self.labels).index(0)]
 		#Collect the indices for sorting these scores from high to low, taking only the Top N
 		score_args = np.argsort(scores)[::-1][:self.limit]
+		labs=np.array(self.labels)[score_args]
 		#Gulp. Some Top N stuff here. Only take the needed NxN matarix
 		full_mat_ = full_mat[score_args][:,score_args]
 		#print full_mat_.shape
@@ -145,24 +160,38 @@ class BinaryChooser:
 		#print scores
 		score_args = np.argsort(scores)[::-1]
 		#labs are what the score args sort our input list to be
-		labs = np.array(self.labels)[score_args]
+		labs = labs[score_args]
+		labs_ = []
+		for i in range(len(labs)):
+			#print labs[i],type(labs[i])
+			try:
+				v_ = int(labs[i])
+				labs_.append(v_)
+			except:
+				v_ =str(labs[i])
+				labs_.append(int(v_.split('_')[1]))
+		labs_=np.array(labs_)
+		correct = np.sort(labs_)[::-1]
 		#Sort the labels by what they should be....
 		#Probably need to rewrite based for triangles.....
-		correct = np.sort(np.arange(len(self.labels)))[::-1][:self.limit]
+		#correct = np.sort(np.arange(len(self.labels)))[::-1][:self.limit]
 		scores=scores[score_args]
 		#Check to see if everything matches from the correct order and the returned order
-		correct_ = np.all(correct==np.array(self.labels)[score_args])
+		correct_ = np.all(correct==labs_)
 		#Calculate the percent of the array predicted correctly
-		corr_per = np.nonzero(correct==labs)[0].shape[0]/float(len(correct))
-		#Compute the RMSE for the computed order
-		corr_scr = np.sqrt(np.mean((correct-labs)**2))
+		corr_per = np.nonzero(correct==labs_)[0].shape[0]/float(len(correct))
+		#Compute the RMSE for the computed order)
+		corr_scr = np.sqrt(np.mean((correct-labs_)**2))
 		#A second metric doing favorable MU's - unfavorable MU's. Works poorly.
 		matchups =[np.nonzero(full_mat_[i]>=self.goal)[0].shape[0]-np.nonzero(full_mat_[i]<=(-1*self.goal))[0].shape[0] for i in score_args]
 		mu_args = np.argsort(matchups)[::-1]
 		mu_scores_ = np.array(matchups)[mu_args]
-		correct_2 = np.all(correct==labs[mu_args])
-		corr_per2 = np.nonzero(correct==labs[mu_args])[0].shape[0]/float(len(correct))
-		corr_scr2 = np.sqrt(np.mean((correct-labs[mu_args])**2))
+		#print self.labels
+		#print correct
+		#print labs[mu_args]
+		correct_2 = np.all(correct==labs_[mu_args])
+		corr_per2 = np.nonzero(correct==labs_[mu_args])[0].shape[0]/float(len(correct))
+		corr_scr2 = np.sqrt(np.mean((correct-labs_[mu_args])**2))
 		#Third metric where the favorable and unfavorable MU's are then weighted
 		#by how good/bad the opponent was.
 		mu_scores2=[]
@@ -181,9 +210,9 @@ class BinaryChooser:
 			mu_scores2.append(running)
 		mu_args2 = np.argsort(mu_scores2)[::-1]
 		mu_scores2_ = np.array(mu_scores2)[mu_args2]
-		correct_3 = np.all(correct==labs[mu_args2])
-		corr_per3 = np.nonzero(correct==labs[mu_args2])[0].shape[0]/float(len(correct))
-		corr_scr3 = np.sqrt(np.mean((correct-labs[mu_args2])**2))
+		correct_3 = np.all(correct==labs_[mu_args2])
+		corr_per3 = np.nonzero(correct==labs_[mu_args2])[0].shape[0]/float(len(correct))
+		corr_scr3 = np.sqrt(np.mean((correct-labs_[mu_args2])**2))
 		
 		return self.conv_steps,((len(self.labels)**2-len(self.labels))/2),zip(labs,scores,matchups,mu_scores2),correct_,corr_per,corr_scr,correct_2,corr_per2,corr_scr2,correct_3,corr_per3,corr_scr3
 		
@@ -204,7 +233,7 @@ class BinaryChooser:
 		#print len(tvals)
 		#If every matchup is accurate, we're done
 		if np.min(tvals)>=self.goal:
-			#print 'Condition 1'
+			print 'Condition 1'
 			return True
 		#If everything averages to something better than self.goal, we're done
 		if np.mean(tvals)>= (1+self.goal)/2.:
@@ -212,23 +241,24 @@ class BinaryChooser:
 		#tvals = np.abs(full_mat[np.tril_indices(full_mat.shape[0],k=-1)])
 		#Now we're worried about ending the script if it's never converging.
 		tvals = np.sort(tvals)
-		tvals_ = tvals[:len(tvals)/10]
-		val = np.mean(tvals)
-		if len(self.vals)>= self.max_runs:
-			self.vals=self.vals[1:]+[val]
-		else:
-			self.vals.append(val)
-		if len(self.vals)==self.max_runs:
-			#If the average convergence hasn't changed much in max_runs, end the script
-			#(we also have to properly scale the convergence criteria, self.tol)
-			if np.max(self.vals)-np.min(self.vals)<(self.tol/self.matrix.shape[0]):
-				#print 'Condition 2'
-				return True 
-			mid = self.max_runs/2
-			#Split into two halves, in case of more chaotic behavior
-			if np.abs(np.max(self.vals[:mid])-np.max(self.vals[mid:]))<(self.tol/(2.*self.matrix.shape[0])):
-				#print 'Condition 3'
-				return True 
+		if tvals[0]>0.001:
+			#tvals_ = tvals[:len(tvals)/10]
+			val = np.mean(tvals)
+			if len(self.vals)>= self.max_runs:
+				self.vals=self.vals[1:]+[val]
+			else:
+				self.vals.append(val)
+			if len(self.vals)==self.max_runs:
+				#If the average convergence hasn't changed much in max_runs, end the script
+				#(we also have to properly scale the convergence criteria, self.tol)
+				if np.max(self.vals)-np.min(self.vals)<(self.tol/self.limit):#self.matrix.shape[0]):
+					print 'Condition 2'
+					return True 
+				mid = self.max_runs/2
+				#Split into two halves, in case of more chaotic behavior
+				if np.abs(np.max(self.vals[:mid])-np.max(self.vals[mid:]))<(self.tol/(2.*self.limit)):#self.matrix.shape[0])):
+					print 'Condition 3'
+					return True 
 		return False	
 	
 	#Randomaly select the choices presented to the user.
@@ -236,12 +266,13 @@ class BinaryChooser:
 	def get_choices(self):
 		full_mat=self.matrix-self.matrix.T
 		row_sums = np.sum(np.abs(full_mat),axis=1)
-		score_args = np.argsort(np.sum(full_mat),axis=1)[::-1][:self.limit]
+		score_args = np.argsort(np.sum(full_mat,axis=1))[::-1][:self.limit]
 		#Use an exponential distribution based on amount of MU data
 		weights = np.exp(-2*row_sums)
 		#Prioritize labels in the top N
+		wt = len(self.labels)/float(self.limit)
 		for sa in score_args:
-			weights[sa]*=1.25
+			weights[sa]*=(4*wt)
 		weights/=np.sum(weights)
 		#Get the first opponent
 		ind_a = np.random.choice(np.arange(row_sums.shape[0]),p=weights)
@@ -251,11 +282,11 @@ class BinaryChooser:
 		#Prevent a vs. a matchups
 		weights[ind_a]=0.0
 		for sa in score_args:
-			weights[sa]*=1.25
+			weights[sa]*=(4*wt)
 		#Upweight zero info matchups
 		for i,w in enumerate(weights):
-			if w>0.99:
-				weights[i]*=2
+			if w>0.9999 and w<1.00001:
+				weights[i]*=2*wt*wt
 		weights/=np.sum(weights)
 		ind_b = np.random.choice(np.arange(col_vals.shape[0]),p=weights)
 		return self.labels[ind_a],self.labels[ind_b],ind_a,ind_b
@@ -412,4 +443,39 @@ class BinaryChooser:
 				print tier_names.pop(0)+':'
 			curr_tier=tier
 			print '%s %.2f' % (lab,scr)
+			
+	def get_prob_stats(self,keys,runs=100):
+		return_dict={}
+		if type(keys[0])==str:
+			keys_=[eval(k) for k in keys]
+			keys=keys_
+		for key in keys:
+			steps=[]
+			correct1_scrs=[]
+			correct1_pers=[]
+			correct2_scrs=[]
+			correct2_pers=[]
+			correct3_scrs=[]
+			correct3_pers=[]
+			return_dict[str(key)]={}
+			for i in range(runs):
+				if len(key)==3:
+					stuff = self.auto_run(key[0],prop_lim=key[1],goal=key[2])
+				elif len(key)==4:
+					stuff = self.auto_run(key[0],prop_lim=key[1],goal=key[2],vict_prob=key[3])
+				elif len(key)==5:
+					stuff = self.auto_run(key[0],prop_lim=key[1],goal=key[2],vict_prob=key[3],top=key[4])
+				steps.append(stuff[0])
+				correct1_scrs.append(stuff[5])
+				correct1_pers.append(stuff[4])
+				correct2_pers.append(stuff[7])
+				correct2_scrs.append(stuff[8])
+				correct3_pers.append(stuff[10])
+				correct3_scrs.append(stuff[11])
+			return_dict[str(key)]['scores']=[np.mean(steps),np.min(steps),np.max(steps),np.std(steps)]
+			return_dict[str(key)]['correct1']=[np.mean(correct1_pers),np.std(correct1_pers),np.mean(correct1_scrs),np.std(correct1_scrs)]
+			return_dict[str(key)]['correct2']=[np.mean(correct2_pers),np.std(correct2_pers),np.mean(correct2_scrs),np.std(correct2_scrs)]
+			return_dict[str(key)]['correct3']=[np.mean(correct3_pers),np.std(correct3_pers),np.mean(correct3_scrs),np.std(correct3_scrs)]
+		return return_dict
+	
 		
